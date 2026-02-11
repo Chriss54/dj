@@ -2,6 +2,20 @@
 
 import { useState } from "react";
 
+// Small inline reset button, only shown when value differs from default
+function ResetBtn({ onClick, label = "Reset" }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-200 transition-colors"
+      title={label}
+    >
+      ✕
+    </button>
+  );
+}
+
 interface AdvancedSettingsProps {
   strategy: string | null;
   onStrategyChange: (strategy: string | null) => void;
@@ -54,7 +68,10 @@ export default function AdvancedSettings({
         <div className="p-4 pt-0 space-y-4 border-t border-zinc-800">
           {/* Strategy override */}
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">Transition Strategy</label>
+            <div className="flex items-center gap-1">
+              <label className="block text-xs text-zinc-500 mb-1">Transition Strategy</label>
+              {strategy && <ResetBtn onClick={() => onStrategyChange(null)} />}
+            </div>
             <select
               value={strategy || ""}
               onChange={(e) => onStrategyChange(e.target.value || null)}
@@ -68,17 +85,18 @@ export default function AdvancedSettings({
 
           {/* SFX toggle */}
           <div className="flex items-center justify-between">
-            <label className="text-xs text-zinc-500">Sound Effects (SFX)</label>
+            <div className="flex items-center gap-1">
+              <label className="text-xs text-zinc-500">Sound Effects (SFX)</label>
+              {!enableSfx && <ResetBtn onClick={() => onSfxToggle(true)} />}
+            </div>
             <button
               onClick={() => onSfxToggle(!enableSfx)}
-              className={`w-10 h-5 rounded-full transition-colors relative ${
-                enableSfx ? "bg-indigo-500" : "bg-zinc-700"
-              }`}
+              className={`w-10 h-5 rounded-full transition-colors relative ${enableSfx ? "bg-indigo-500" : "bg-zinc-700"
+                }`}
             >
               <span
-                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                  enableSfx ? "left-5" : "left-0.5"
-                }`}
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${enableSfx ? "left-5" : "left-0.5"
+                  }`}
               />
             </button>
           </div>
@@ -86,19 +104,20 @@ export default function AdvancedSettings({
           {/* Mix in Key toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <label className="text-xs text-zinc-500">Mix in Key</label>
+              <div className="flex items-center gap-1">
+                <label className="text-xs text-zinc-500">Mix in Key</label>
+                {mixInKey && <ResetBtn onClick={() => onMixInKeyToggle(false)} />}
+              </div>
               <p className="text-[10px] text-zinc-600">Pitch-shifts Song B to match Song A&apos;s key</p>
             </div>
             <button
               onClick={() => onMixInKeyToggle(!mixInKey)}
-              className={`w-10 h-5 rounded-full transition-colors relative ${
-                mixInKey ? "bg-indigo-500" : "bg-zinc-700"
-              }`}
+              className={`w-10 h-5 rounded-full transition-colors relative ${mixInKey ? "bg-indigo-500" : "bg-zinc-700"
+                }`}
             >
               <span
-                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                  mixInKey ? "left-5" : "left-0.5"
-                }`}
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${mixInKey ? "left-5" : "left-0.5"
+                  }`}
               />
             </button>
           </div>
@@ -106,7 +125,10 @@ export default function AdvancedSettings({
           {/* BPM overrides */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Song A BPM Override</label>
+              <div className="flex items-center gap-1">
+                <label className="block text-xs text-zinc-500 mb-1">Song A BPM Override</label>
+                {bpmOverrideA !== null && <ResetBtn onClick={() => onBpmOverrideA(null)} />}
+              </div>
               <input
                 type="number"
                 placeholder="Auto"
@@ -117,7 +139,10 @@ export default function AdvancedSettings({
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Song B BPM Override</label>
+              <div className="flex items-center gap-1">
+                <label className="block text-xs text-zinc-500 mb-1">Song B BPM Override</label>
+                {bpmOverrideB !== null && <ResetBtn onClick={() => onBpmOverrideB(null)} />}
+              </div>
               <input
                 type="number"
                 placeholder="Auto"
@@ -132,7 +157,10 @@ export default function AdvancedSettings({
           {/* Key overrides */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Song A Key Override</label>
+              <div className="flex items-center gap-1">
+                <label className="block text-xs text-zinc-500 mb-1">Song A Key Override</label>
+                {keyOverrideA && <ResetBtn onClick={() => onKeyOverrideA(null)} />}
+              </div>
               <input
                 type="text"
                 placeholder="Auto (e.g. Am, C)"
@@ -142,7 +170,10 @@ export default function AdvancedSettings({
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Song B Key Override</label>
+              <div className="flex items-center gap-1">
+                <label className="block text-xs text-zinc-500 mb-1">Song B Key Override</label>
+                {keyOverrideB && <ResetBtn onClick={() => onKeyOverrideB(null)} />}
+              </div>
               <input
                 type="text"
                 placeholder="Auto (e.g. Em, G)"

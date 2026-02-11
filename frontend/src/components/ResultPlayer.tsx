@@ -9,9 +9,11 @@ interface ResultPlayerProps {
   sessionId: string;
   mixDecision: MixDecision;
   downloadUrl: string;
+  onRegenerate?: () => void;
+  isRegenerating?: boolean;
 }
 
-export default function ResultPlayer({ sessionId, mixDecision, downloadUrl }: ResultPlayerProps) {
+export default function ResultPlayer({ sessionId, mixDecision, downloadUrl, onRegenerate, isRegenerating }: ResultPlayerProps) {
   const [showReasoning, setShowReasoning] = useState(false);
 
   const strategyLabels: Record<string, string> = {
@@ -28,11 +30,10 @@ export default function ResultPlayer({ sessionId, mixDecision, downloadUrl }: Re
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-zinc-200">Your Mix</h2>
         <div className="flex items-center gap-2">
-          <span className={`px-2 py-1 rounded text-xs font-medium ${
-            mixDecision.confidence >= 0.8 ? "bg-green-500/20 text-green-400" :
-            mixDecision.confidence >= 0.5 ? "bg-yellow-500/20 text-yellow-400" :
-            "bg-red-500/20 text-red-400"
-          }`}>
+          <span className={`px-2 py-1 rounded text-xs font-medium ${mixDecision.confidence >= 0.8 ? "bg-green-500/20 text-green-400" :
+              mixDecision.confidence >= 0.5 ? "bg-yellow-500/20 text-yellow-400" :
+                "bg-red-500/20 text-red-400"
+            }`}>
             {strategyLabels[mixDecision.strategy] || mixDecision.strategy}
           </span>
           <span className="text-xs text-zinc-500">
@@ -61,6 +62,21 @@ export default function ResultPlayer({ sessionId, mixDecision, downloadUrl }: Re
           </svg>
           Download MP3 (320kbps)
         </a>
+        {onRegenerate && (
+          <button
+            onClick={onRegenerate}
+            disabled={isRegenerating}
+            className={`flex items-center justify-center gap-2 rounded-lg py-3 px-5 font-medium transition-colors ${isRegenerating
+                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                : "bg-zinc-700 hover:bg-zinc-600 text-zinc-200"
+              }`}
+          >
+            <svg className={`w-5 h-5 ${isRegenerating ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {isRegenerating ? "Regenerating..." : "Regenerate"}
+          </button>
+        )}
       </div>
 
       {/* AI Reasoning panel */}

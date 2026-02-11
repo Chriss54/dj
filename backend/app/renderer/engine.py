@@ -37,23 +37,31 @@ async def render_mix(
         wav_b = _ensure_wav(song_b_path, work_dir / "b_full.wav")
 
         # Step 2: Extract segments from ORIGINAL audio (before time-stretch)
-        # Analysis positions are in original-tempo space, so extraction must
-        # happen on un-stretched audio to get the correct regions.
-        out_point = md.song_a.out_point_ms or md.song_a.fade_start_ms or 0
-        fade_start = md.song_a.fade_start_ms or out_point
+        # acrossfade always crossfades the LAST d seconds of input 1 with the
+        # FIRST d seconds of input 2. To position the crossfade at fade_start,
+        # we truncate Song A so its end = fade_start + transition_zone.
+        fade_start = md.song_a.fade_start_ms or md.song_a.out_point_ms or 0
         in_point = md.song_b.in_point_ms or 0
         trans_dur = md.transition.total_duration_ms
 
-        # trans_dur is at target BPM; in original Song A tempo it spans more/less time
         sa_sf = md.song_a.tempo_stretch_factor
         sb_sf = md.song_b.tempo_stretch_factor
-        orig_trans_a = trans_dur / sa_sf if sa_sf != 1.0 else trans_dur
 
-        seg_a = _extract_segment(wav_a, 0, fade_start + orig_trans_a, work_dir / "seg_a.wav")
+        # Calculate the transition zone in original-tempo time.
+        # trans_dur is at target BPM; in Song A's original tempo the same
+        # number of bars spans a different duration: multiply by sa_sf
+        # because after time-stretch (÷ sa_sf), it becomes exactly trans_dur.
+        orig_trans_dur_a = trans_dur * sa_sf if sa_sf != 1.0 else trans_dur
+
+        # Truncate Song A through the transition zone end
+        seg_a_end_ms = fade_start + orig_trans_dur_a
+        seg_a = _extract_segment(wav_a, 0, seg_a_end_ms, work_dir / "seg_a.wav")
         seg_b = _extract_segment(wav_b, in_point, None, work_dir / "seg_b.wav")
 
-        # Step 3: Apply EQ automation (in original-tempo space, before stretching)
+        # Step 3: Apply EQ automation
+        # Song A: timestamps are absolute (segment starts at 0ms of original)
         seg_a = _apply_eq_automation(seg_a, md.transition.eq_automation, "a", 0, work_dir)
+        # Song B: timestamps are relative to transition start (segment start)
         seg_b = _apply_eq_automation(seg_b, md.transition.eq_automation, "b", 0, work_dir)
 
         # Step 4: Time-stretch segments to target BPM
@@ -131,18 +139,24 @@ def _pitch_shift(input_wav: Path, semitones: int, output_path: Path) -> Path:
 
 
 def _time_stretch(input_wav: Path, factor: float, output_path: Path) -> Path:
-    """Time-stretch using rubberband for high-quality pitch-preserving stretch."""
+    """Time-stretch using rubberband for high-quality pitch-preserving stretch.
+
+    `factor` = target_bpm / song_bpm (>1 means speed up).
+    rubberband -t expects a time ratio (>1 = slower), so we invert.
+    ffmpeg atempo expects a speed ratio (>1 = faster), so we use factor directly.
+    """
+    rb_time_ratio = 1.0 / factor  # invert: speed-up → shorter duration
     try:
         subprocess.run(
-            ["rubberband", "-t", str(factor), "-p", "0", str(input_wav), str(output_path)],
-            capture_output=True, check=True, timeout=30,
+            ["rubberband", "-t", str(rb_time_ratio), "-p", "0", str(input_wav), str(output_path)],
+            capture_output=True, check=True, timeout=60,
         )
         return output_path
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         logger.warning(f"Rubberband failed ({e}), trying ffmpeg atempo")
         # Fallback: ffmpeg atempo filter (less quality but always available)
         # atempo range is 0.5-2.0, chain for extreme values
-        atempo_val = factor
+        atempo_val = factor  # atempo >1 = faster (correct direction)
         atempo_chain = []
         while atempo_val > 2.0:
             atempo_chain.append("atempo=2.0")
@@ -201,24 +215,47 @@ def _apply_eq_automation(
 
 
 def _eq_filter_for_band(entry: EQAutomationEntry, band: str, offset_ms: float) -> Optional[str]:
-    """Generate FFmpeg filter string for an EQ automation entry."""
+    """Generate FFmpeg filter string for an EQ automation entry.
+
+    Uses smooth volume expressions instead of binary on/off filters
+    to avoid jarring volume drops at the transition point.
+    """
     start_s = (entry.start_ms - offset_ms) / 1000
     end_s = (entry.end_ms - offset_ms) / 1000
     if start_s < 0:
         start_s = 0
+    dur_s = end_s - start_s
+    if dur_s <= 0:
+        return None
 
+    from_db = entry.from_db
+    to_db = entry.to_db
+
+    # Use an equalizer band filter with a smooth volume ramp via
+    # the volume filter and enable expressions.
+    # This creates a gradual gain change rather than a hard on/off.
     if band == "bass":
-        if entry.action == "cut":
-            # Progressive highpass: 20Hz → 200Hz
-            return f"highpass=f=200:enable='between(t,{start_s:.3f},{end_s:.3f})'"
-        else:
-            return f"lowpass=f=200:enable='between(t,{start_s:.3f},{end_s:.3f})'"
+        freq = 100
+        width = 120  # Hz bandwidth
     elif band == "highs":
-        if entry.action == "cut":
-            return f"lowpass=f=5000:enable='between(t,{start_s:.3f},{end_s:.3f})'"
-        else:
-            return f"highpass=f=5000:enable='between(t,{start_s:.3f},{end_s:.3f})'"
-    return None
+        freq = 8000
+        width = 4000
+    elif band == "mids":
+        freq = 1000
+        width = 2000
+    else:
+        return None
+
+    # Compute gain ramp: linearly interpolate between from_db and to_db
+    # over the window [start_s, end_s] using ffmpeg expressions.
+    # gain(t) = from_db + (to_db - from_db) * ((t - start_s) / dur_s)
+    # Clamp to the window with enable.
+    gain_expr = f"{from_db}+{to_db - from_db}*((t-{start_s:.3f})/{dur_s:.3f})"
+    return (
+        f"equalizer=f={freq}:width_type=h:width={width}"
+        f":g='{gain_expr}'"
+        f":enable='between(t,{start_s:.3f},{end_s:.3f})'"
+    )
 
 
 def _crossfade(

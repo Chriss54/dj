@@ -12,6 +12,8 @@ interface AnalysisDashboardProps {
   compatibility: Compatibility | null;
   onTransitionSelect?: (startMs: number) => void;
   onInPointSelect?: (startMs: number) => void;
+  labelA?: string;
+  labelB?: string;
 }
 
 function SongCard({ song, audioUrl, label, color, onRegionSelect }: {
@@ -23,11 +25,11 @@ function SongCard({ song, audioUrl, label, color, onRegionSelect }: {
 }) {
   const bpmColor =
     song.bpm_confidence >= 0.8 ? "text-green-400" :
-    song.bpm_confidence >= 0.6 ? "text-yellow-400" : "text-red-400";
+      song.bpm_confidence >= 0.6 ? "text-yellow-400" : "text-red-400";
 
   const keyColor =
     song.key_confidence >= 0.8 ? "text-green-400" :
-    song.key_confidence >= 0.6 ? "text-yellow-400" : "text-red-400";
+      song.key_confidence >= 0.6 ? "text-yellow-400" : "text-red-400";
 
   return (
     <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
@@ -87,6 +89,7 @@ function SongCard({ song, audioUrl, label, color, onRegionSelect }: {
 
 export default function AnalysisDashboard({
   songA, songB, songAUrl, songBUrl, compatibility, onTransitionSelect, onInPointSelect,
+  labelA = "Song A", labelB = "Song B",
 }: AnalysisDashboardProps) {
   if (!songA && !songB) return null;
 
@@ -98,7 +101,7 @@ export default function AnalysisDashboard({
           <SongCard
             song={songA}
             audioUrl={songAUrl}
-            label="Song A"
+            label={labelA}
             color="#6366f1"
             onRegionSelect={onTransitionSelect ? (start) => onTransitionSelect(start) : undefined}
           />
@@ -107,7 +110,7 @@ export default function AnalysisDashboard({
           <SongCard
             song={songB}
             audioUrl={songBUrl}
-            label="Song B"
+            label={labelB}
             color="#ec4899"
             onRegionSelect={onInPointSelect ? (start) => onInPointSelect(start) : undefined}
           />

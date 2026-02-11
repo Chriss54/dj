@@ -16,6 +16,8 @@ export default function Home() {
   // Upload state
   const [deckA, setDeckA] = useState<UploadResult | null>(null);
   const [deckB, setDeckB] = useState<UploadResult | null>(null);
+  const [originalFilenameA, setOriginalFilenameA] = useState<string | null>(null);
+  const [originalFilenameB, setOriginalFilenameB] = useState<string | null>(null);
 
   // Analysis state
   const [songA, setSongA] = useState<SongAnalysis | null>(null);
@@ -47,13 +49,15 @@ export default function Home() {
   const wsSession = mixResult?.session_id || null;
   useWebSocket(wsSession);
 
-  const handleUploadComplete = useCallback((deck: "a" | "b", result: UploadResult) => {
+  const handleUploadComplete = useCallback((deck: "a" | "b", result: UploadResult, originalFilename: string) => {
     if (deck === "a") {
       setDeckA(result);
       setSongA(result.analysis);
+      setOriginalFilenameA(originalFilename);
     } else {
       setDeckB(result);
       setSongB(result.analysis);
+      setOriginalFilenameB(originalFilename);
     }
 
     // If both songs are uploaded, compute compatibility
@@ -66,6 +70,35 @@ export default function Home() {
     setMixResult(null);
     setError(null);
   }, [deckA, deckB]);
+
+  const handleRemoveSong = useCallback((deck: "a" | "b") => {
+    if (deck === "a") {
+      setDeckA(null);
+      setSongA(null);
+      setOriginalFilenameA(null);
+    } else {
+      setDeckB(null);
+      setSongB(null);
+      setOriginalFilenameB(null);
+    }
+    setCompatibility(null);
+    setMixResult(null);
+    setTransitionStartMs(null);
+    setSongBInPointMs(null);
+    setError(null);
+    setPipelineStage("idle");
+  }, []);
+
+  const handleSwapSongs = useCallback(() => {
+    setDeckA(prev => { const old = deckB; setDeckB(prev); return old; });
+    setSongA(prev => { const old = songB; setSongB(prev); return old; });
+    setOriginalFilenameA(prev => { const old = originalFilenameB; setOriginalFilenameB(prev); return old; });
+    setTransitionStartMs(null);
+    setSongBInPointMs(null);
+    setMixResult(null);
+    setPipelineStage("idle");
+    // Recompute compatibility (order-independent, but reset to be safe)
+  }, [deckA, deckB, songA, songB, originalFilenameA, originalFilenameB]);
 
   const handleGenerateMix = useCallback(async () => {
     if (!deckA || !deckB) return;
@@ -129,7 +162,15 @@ export default function Home() {
         {/* Upload Section */}
         <section>
           <h2 className="text-xl font-bold text-zinc-200 mb-4">Upload Songs</h2>
-          <DualDeckUpload onUploadComplete={handleUploadComplete} />
+          <DualDeckUpload
+            onUploadComplete={handleUploadComplete}
+            onRemove={handleRemoveSong}
+            onSwap={handleSwapSongs}
+            uploadedFilenameA={deckA?.analysis.filename ?? null}
+            uploadedFilenameB={deckB?.analysis.filename ?? null}
+            originalFilenameA={originalFilenameA}
+            originalFilenameB={originalFilenameB}
+          />
         </section>
 
         {/* Analysis Section */}
@@ -143,6 +184,8 @@ export default function Home() {
               compatibility={compatibility}
               onTransitionSelect={setTransitionStartMs}
               onInPointSelect={setSongBInPointMs}
+              labelA={originalFilenameA ? originalFilenameA.replace(/\.[^.]+$/, "") : "Song A"}
+              labelB={originalFilenameB ? originalFilenameB.replace(/\.[^.]+$/, "") : "Song B"}
             />
           </section>
         )}
@@ -204,11 +247,10 @@ export default function Home() {
           <button
             onClick={handleGenerateMix}
             disabled={isGenerating}
-            className={`w-full py-4 rounded-xl text-lg font-bold transition-all ${
-              isGenerating
-                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                : "bg-gradient-to-r from-indigo-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-lg shadow-indigo-500/20"
-            }`}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition-all ${isGenerating
+              ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-indigo-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-lg shadow-indigo-500/20"
+              }`}
           >
             {isGenerating ? "Generating..." : "Generate Mix"}
           </button>
@@ -243,6 +285,8 @@ export default function Home() {
             sessionId={mixResult.session_id}
             mixDecision={mixResult.contract_b.mix_decision}
             downloadUrl={mixResult.download_url}
+            onRegenerate={handleGenerateMix}
+            isRegenerating={isGenerating}
           />
         )}
       </main>
